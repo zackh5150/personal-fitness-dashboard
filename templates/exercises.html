@@ -1,26 +1,128 @@
 {% extends "layout.html" %}
 
 {% block content %}
-<h1>Exercise Suggestions</h1>
-<p>Find exercises based on your equipment and target muscles.</p>
+<h1>Equipment List</h1>
+<p>Add your equipment and get exercise suggestions.</p>
 
-<!-- TODO (Christian - Functionality 4):
-     Build the exercise suggestion page.
+<!-- Equipment Accordion (matches Christian's SuggestionBox component) -->
+<div class="accordion" id="equipmentAccordion">
+    {% for eq in equipment %}
+    <div class="accordion-item">
+        <h2 class="accordion-header d-flex align-items-center">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ eq.id }}">
+                <span>
+                    <p style="font-weight: bold; text-decoration: underline; font-size: 24px; margin: 0;">{{ eq.equipment_name }}</p>
+                </span>
+            </button>
+            <!-- Delete Button -->
+            <form action="/exercises/delete/{{ eq.id }}" method="POST" style="margin: 0;">
+                <button type="submit" class="btn btn-outline-danger btn-sm me-3" title="Delete equipment">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </form>
+        </h2>
+        <div id="collapse{{ eq.id }}" class="accordion-collapse collapse" data-bs-parent="#equipmentAccordion">
+            <div class="accordion-body">
+                <p style="white-space: pre-line;">Name: {{ eq.suggestion_name }}
 
-     What to add here:
-     - A form where the user picks a muscle group and/or equipment type
-     - When submitted, call the API Ninjas exercise API from app.py:
-       URL: https://api.api-ninjas.com/v1/exercises?muscle=biceps
-       Header: X-Api-Key: YOUR_API_KEY
-       (use the requests library: pip install requests)
-     - Display the results as a list of exercises
-     - Let the user rate exercises (1-5 stars) and save to exercise_ratings table
-     - Show their saved ratings
+Instructions: {{ eq.suggestion_instructions }}
 
-     The "exercise_ratings" table is already set up in database.py.
--->
+Safety Info: {{ eq.suggestion_safety or "None" }}</p>
 
-<div class="card">
-    <p><em>Exercise suggestions coming soon.</em></p>
+                <!-- Rating Section -->
+                <div class="mt-3 border-top pt-2">
+                    <h6>
+                        {% if eq.rating == -1 %}
+                            Rate this suggestion?
+                        {% else %}
+                            Rating: {{ eq.rating }}/10
+                        {% endif %}
+                    </h6>
+                    {% for star in range(1, 11) %}
+                    <form action="/exercises/rate" method="POST" style="display: inline; margin: 0;">
+                        <input type="hidden" name="exercise_name" value="{{ eq.suggestion_name }}">
+                        <input type="hidden" name="rating" value="{{ star }}">
+                        <button type="submit" style="cursor: pointer; font-size: 1.2rem; color: {{ '#ffc107' if star <= eq.rating else '#e4e5e9' }}; background: none; border: none; padding: 0;">&#9733;</button>
+                    </form>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
 </div>
+
+{% if not equipment %}
+<div class="card mt-3">
+    <div class="card-body">
+        <p><em>No equipment added yet. Add some below!</em></p>
+    </div>
+</div>
+{% endif %}
+
+<!-- Add New Equipment -->
+<div class="mt-4 p-3 border rounded bg-light">
+    <h5>Add New Equipment</h5>
+    <form action="/exercises/add" method="POST">
+        <div class="row g-2">
+            <!-- Equipment Selection -->
+            <div class="col-md-8">
+                <select class="form-select" name="equipment_name" required>
+                    <option value="">Choose equipment</option>
+                    {% for item in equipment_list %}
+                    <option value="{{ item }}" {% if item in owned_names %}disabled{% endif %}>
+                        {{ item }}{% if item in owned_names %} (Owned){% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <!-- Add Button -->
+            <div class="col-md-4">
+                <button type="submit" class="btn btn-success w-100">Add Equipment</button>
+            </div>
+        </div>
+        <small class="text-muted mt-1 d-block">
+            Suggestions filtered by profile fitness level: <strong>{{ user.fitness_level or "beginner" }}</strong>
+        </small>
+    </form>
+</div>
+
+<!-- Suggestion Refresh (matches Christian's refresh timer feature) -->
+<div class="mt-3 p-3 border rounded bg-light">
+    <div class="d-flex align-items-center">
+        <span style="font-weight: bold; white-space: nowrap; margin-right: 10px;">Suggestion Refresh:</span>
+        <select class="form-select w-auto" id="refreshInterval" onchange="updateRefreshTimer()">
+            <option value="10000">10 sec</option>
+            <option value="3600000" selected>1 hr</option>
+            <option value="86400000">24 hr</option>
+        </select>
+        <form action="/exercises/refresh" method="POST" id="refreshForm" class="ms-2">
+            <button type="submit" class="btn btn-primary btn-sm">Refresh All Suggestions</button>
+        </form>
+    </div>
+</div>
+
+<script>
+// Auto-refresh timer (matches Christian's useEffect interval in Equipment.tsx)
+var refreshTimer = null;
+
+function updateRefreshTimer() {
+    if (refreshTimer) clearInterval(refreshTimer);
+    var ms = parseInt(document.getElementById('refreshInterval').value);
+    // save to localStorage like Christian's code
+    localStorage.setItem('cachedRefresh', ms);
+    refreshTimer = setInterval(function() {
+        document.getElementById('refreshForm').submit();
+    }, ms);
+}
+
+// restore saved interval on page load
+(function() {
+    var saved = localStorage.getItem('cachedRefresh');
+    if (saved) {
+        document.getElementById('refreshInterval').value = saved;
+    }
+    updateRefreshTimer();
+})();
+</script>
 {% endblock %}

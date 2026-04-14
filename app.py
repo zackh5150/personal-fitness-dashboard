@@ -1,6 +1,8 @@
 from flask import Flask, render_template, request, redirect, url_for
 from database import get_db, init_db
 from datetime import datetime
+import requests as http_requests
+import random
 
 app = Flask(__name__)
 
@@ -200,20 +202,192 @@ def progress_page():
 
 
 # ================================================================
-#  Functionality 4: Exercise Suggestions (TODO - Christian)
+#  Functionality 4: Exercise Suggestions (Christian)
 # ================================================================
+
+API_KEY = "WH8t1WdYIZ4kRKOWN6CNknnxhGVLGP9dKueueBVN"
+
+EQUIPMENT_LIST = [
+    "ab machine", "abductor machine", "adductor machine", "assisted pull-up/dip machine",
+    "bench press machine", "bicep curl machine", "cable machine", "calf raise machine",
+    "chest fly machine / pec deck machine", "chest press machine", "dip machine",
+    "elliptical machine", "glute-ham developer", "hack squat machine", "high row machine",
+    "hyperextension bench / roman chair", "lat pulldown machine", "lateral raise machine",
+    "leg curl machine", "leg extension machine", "leg press machine",
+    "leverage deadlift machine", "pullover machine", "rear delt fly machine",
+    "rowing machine", "seated back extension machine", "seated row machine",
+    "shoulder press machine", "shrug machine", "smith machine", "squat machine",
+    "stair climber machine", "standing leg curl machine", "t-bar row machine", "treadmill",
+    "triceps extension machine", "adjustable bench", "decline bench", "flat bench",
+    "incline bench", "military press bench", "preacher bench", "bench", "barbell",
+    "axle bar", "body bar", "ez curl bar", "trap bar / hex bar", "strongman log",
+    "dumbbell", "kettlebell", "weight plate", "medicine ball", "power rack / squat rack",
+    "barbell rack", "captain's chair", "pull-up bar", "dip bars / parallel bars",
+    "gymnastic rings", "cable handle / d-handle", "v-bar / row handle", "rope attachment",
+    "straight bar attachment", "lat pulldown bar", "ez bar attachment", "ankle strap",
+    "resistance band", "bfr bands / occlusion bands", "chain", "plyo box", "aerobic step",
+    "block", "platform", "exercise mat", "foam roller", "stability ball", "bosu ball",
+    "weight belt / dip belt", "head harness", "barbell pad", "barbell collars", "knee pad",
+    "wrist wraps", "ankle weights", "weight vest", "wrist weights", "atlas stone",
+    "farmer's walk implements", "sled", "tire", "yoke", "sandbag", "keg",
+    "rickshaw frame", "conan's wheel", "circus bell", "stationary bike", "jump rope",
+    "agility ladder", "cone", "hurdle", "sliders", "anchor point / door anchor",
+    "landmine attachment", "suspension trainer", "towel", "wrist roller",
+    "safety pins / j-hooks", "strap", "chair", "climbing rope", "heavy bag",
+    "sledgehammer", "wall", "training partner", "post", "stairs", "dowel / pvc pipe",
+]
+
+
+def fetch_suggestion(equipment_name, difficulty):
+    """Call API Ninjas and pick a weighted-random exercise suggestion."""
+    url = "https://api.api-ninjas.com/v1/exercises"
+    params = {"equipment": equipment_name, "difficulty": difficulty}
+    headers = {"X-Api-Key": API_KEY}
+
+    try:
+        resp = http_requests.get(url, params=params, headers=headers, timeout=10)
+        data = resp.json()
+    except Exception:
+        return ("Error", "Could not reach the exercise API.", "")
+
+    if not data or "error" in (data if isinstance(data, dict) else {}):
+        return ("None", "No exercises found for this equipment.", "")
+
+    # build weights from existing ratings
+    db = get_db()
+    rows = db.execute(
+        "SELECT exercise_name, rating FROM exercise_ratings WHERE user_id = 1"
+    ).fetchall()
+    db.close()
+    ratings_map = {r["exercise_name"]: r["rating"] for r in rows}
+
+    exercises = []
+    weights = []
+    for ex in data:
+        name = ex.get("name", "Unknown")
+        exercises.append(ex)
+        weights.append(ratings_map.get(name, 1))
+
+    pick = random.choices(exercises, weights=weights, k=1)[0]
+    return (
+        pick.get("name", "Unknown"),
+        pick.get("instructions", "None"),
+        pick.get("safety_info", "None") or "",
+    )
+
 
 @app.route("/exercises")
 def exercises_page():
-    # TODO: let user pick a muscle group or equipment type
-    # TODO: call the API Ninjas exercise API to get suggestions
-    #       API URL: https://api.api-ninjas.com/v1/exercises
-    # TODO: show the results on the page
-    return render_template("exercises.html")
+    user = get_user()
+    db = get_db()
+    equipment = db.execute(
+        "SELECT * FROM user_equipment WHERE user_id = 1"
+    ).fetchall()
 
-# TODO: add a POST route for rating an exercise
-#       - INSERT or UPDATE exercise_ratings table
-#       - redirect back to /exercises
+    rating_rows = db.execute(
+        "SELECT exercise_name, rating FROM exercise_ratings WHERE user_id = 1"
+    ).fetchall()
+    db.close()
+    ratings_map = {r["exercise_name"]: r["rating"] for r in rating_rows}
+
+    equip_data = []
+    for eq in equipment:
+        equip_data.append({
+            "id": eq["id"],
+            "equipment_name": eq["equipment_name"],
+            "suggestion_name": eq["suggestion_name"] or "None",
+            "suggestion_instructions": eq["suggestion_instructions"] or "None",
+            "suggestion_safety": eq["suggestion_safety"] or "",
+            "rating": ratings_map.get(eq["suggestion_name"], -1),
+        })
+
+    owned_names = [e["equipment_name"] for e in equip_data]
+
+    return render_template("exercises.html",
+                           user=user,
+                           equipment=equip_data,
+                           equipment_list=EQUIPMENT_LIST,
+                           owned_names=owned_names)
+
+
+@app.route("/exercises/add", methods=["POST"])
+def add_equipment():
+    name = request.form.get("equipment_name")
+    if not name:
+        return redirect(url_for("exercises_page"))
+
+    user = get_user()
+    difficulty = (user["fitness_level"] or "beginner") if user else "beginner"
+
+    sug_name, sug_instr, sug_safety = fetch_suggestion(name, difficulty)
+
+    db = get_db()
+    db.execute(
+        "INSERT INTO user_equipment (user_id, equipment_name, experience, suggestion_name, suggestion_instructions, suggestion_safety) VALUES (1, ?, ?, ?, ?, ?)",
+        (name, difficulty, sug_name, sug_instr, sug_safety),
+    )
+    db.commit()
+    db.close()
+    return redirect(url_for("exercises_page"))
+
+
+@app.route("/exercises/refresh", methods=["POST"])
+def refresh_suggestions():
+    """Re-fetch suggestions from the API for all equipment."""
+    user = get_user()
+    difficulty = (user["fitness_level"] or "beginner") if user else "beginner"
+
+    db = get_db()
+    equipment = db.execute(
+        "SELECT * FROM user_equipment WHERE user_id = 1"
+    ).fetchall()
+
+    for eq in equipment:
+        sug_name, sug_instr, sug_safety = fetch_suggestion(eq["equipment_name"], difficulty)
+        db.execute(
+            "UPDATE user_equipment SET suggestion_name = ?, suggestion_instructions = ?, suggestion_safety = ? WHERE id = ?",
+            (sug_name, sug_instr, sug_safety, eq["id"]),
+        )
+    db.commit()
+    db.close()
+    return redirect(url_for("exercises_page"))
+
+
+@app.route("/exercises/delete/<int:equip_id>", methods=["POST"])
+def delete_equipment(equip_id):
+    db = get_db()
+    db.execute("DELETE FROM user_equipment WHERE id = ? AND user_id = 1", (equip_id,))
+    db.commit()
+    db.close()
+    return redirect(url_for("exercises_page"))
+
+
+@app.route("/exercises/rate", methods=["POST"])
+def rate_exercise():
+    exercise_name = request.form.get("exercise_name")
+    rating = request.form.get("rating")
+    if not exercise_name or not rating:
+        return redirect(url_for("exercises_page"))
+
+    db = get_db()
+    existing = db.execute(
+        "SELECT id FROM exercise_ratings WHERE user_id = 1 AND exercise_name = ?",
+        (exercise_name,),
+    ).fetchone()
+
+    if existing:
+        db.execute(
+            "UPDATE exercise_ratings SET rating = ? WHERE id = ?",
+            (int(rating), existing["id"]),
+        )
+    else:
+        db.execute(
+            "INSERT INTO exercise_ratings (user_id, exercise_name, rating) VALUES (1, ?, ?)",
+            (exercise_name, int(rating)),
+        )
+    db.commit()
+    db.close()
+    return redirect(url_for("exercises_page"))
 
 
 # ================================================================
