@@ -15,9 +15,10 @@
                 </span>
             </button>
             <!-- Delete Button -->
-            <form action="/exercises/delete/{{ eq.id }}" method="POST" style="margin: 0;">
+            <form action="/exercises/deleteUserEquipment" method="POST" style="margin: 0;">
+                        <input type="hidden" name="Equipment" value="{{ eq.equipment_name }}">
                 <button type="submit" class="btn btn-outline-danger btn-sm me-3" title="Delete equipment">
-                    <i class="bi bi-trash"></i>
+                    <i class="bi bi-trash">Delete</i>
                 </button>
             </form>
         </h2>
@@ -39,7 +40,7 @@ Safety Info: {{ eq.suggestion_safety or "None" }}</p>
                         {% endif %}
                     </h6>
                     {% for star in range(1, 11) %}
-                    <form action="/exercises/rate" method="POST" style="display: inline; margin: 0;">
+                    <form action="/exercises/rating" method="POST" style="display: inline; margin: 0;">
                         <input type="hidden" name="exercise_name" value="{{ eq.suggestion_name }}">
                         <input type="hidden" name="rating" value="{{ star }}">
                         <button type="submit" style="cursor: pointer; font-size: 1.2rem; color: {{ '#ffc107' if star <= eq.rating else '#e4e5e9' }}; background: none; border: none; padding: 0;">&#9733;</button>
@@ -63,11 +64,11 @@ Safety Info: {{ eq.suggestion_safety or "None" }}</p>
 <!-- Add New Equipment -->
 <div class="mt-4 p-3 border rounded bg-light">
     <h5>Add New Equipment</h5>
-    <form action="/exercises/add" method="POST">
+    <form action="/exercises/storeUserEquipment" method="POST">
         <div class="row g-2">
             <!-- Equipment Selection -->
             <div class="col-md-8">
-                <select class="form-select" name="equipment_name" required>
+                <select class="form-select" name="Equipment" required>
                     <option value="">Choose equipment</option>
                     {% for item in equipment_list %}
                     <option value="{{ item }}" {% if item in owned_names %}disabled{% endif %}>

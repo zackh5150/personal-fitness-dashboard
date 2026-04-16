@@ -1,24 +1,73 @@
 {% extends "layout.html" %}
-
 {% block content %}
 <h1>Progress</h1>
 <p>Track your training progress over time.</p>
 
-<!-- TODO (Aaron - Functionality 3):
-     Build the progress and analytics page.
-
-     What to add here:
-     - Query workout_logs from the database in app.py
-     - Calculate stats like: total workouts, most used exercises,
-       total volume (sets * reps * weight), workouts per week, etc.
-     - Display the stats on this page (tables, lists, or simple charts)
-     - Optionally detect plateaus (same weight/reps for multiple sessions)
-
-     The data comes from the "workout_logs" table in the database.
-     Pass the calculated stats from app.py to this template.
--->
+<div class="card">
+    <h2>Past Workouts</h2>
+    {% if workouts_history %}
+      <table border="1" cellpadding="8" cellspacing="0">
+        <thead>
+          <tr>
+            <th>DateCompleted</th>
+            <th>ExerciseType</th>
+            <th>MusclesTrained</th>
+            <th>UsedEquipment</th>
+            <th>TotalMinutes</th>
+            <th>Sets</th>
+            <th>Reps</th>
+            <th>Weight</th>
+            <th>Volume</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for workout in workouts_history %}
+            <tr>
+              <td>{{ workout.DateCompleted }}</td>
+              <td>{{ workout.ExerciseType }}</td>
+              <td>{{ workout.MusclesTrained }}</td>
+              <td>{{ workout.UsedEquipment }}</td>
+              <td>{{ workout.TotalMinutes }}</td>
+              <td>{{ workout.Sets }}</td>
+              <td>{{ workout.Reps }}</td>
+              <td>{{ workout.Weight }}</td>
+              <td>{{ workout.Volume }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>No workouts logged</p>
+    {% endif %}
+</div>
 
 <div class="card">
-    <p><em>Progress tracking coming soon.</em></p>
+    <h2>Analytics</h2>
+    {% if analytics %}
+      <table border="1" cellpadding="8" cellspacing="0">
+        <thead>
+          <tr>
+            <th>Exercise</th>
+            <th>TotalWorkouts</th>
+            <th>MaxWeight</th>
+            <th>TotalVolume</th>
+            <th>MaxVolume</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for workout in analytics %}
+            <tr>
+              <td>{{ workout.Exercise }}</td>
+              <td>{{ workout.TotalWorkouts }}</td>
+              <td>{{ workout.MaxWeight }}</td>
+              <td>{{ workout.TotalVolume }}</td>
+              <td>{{ workout.MaxVolume }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>No workouts logged</p>
+    {% endif %}
 </div>
 {% endblock %}
